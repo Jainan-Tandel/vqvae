@@ -5,6 +5,7 @@ import torch.optim as optim
 import argparse
 import utils
 from models.vqvae import VQVAE
+from latent_representations_saver import save_latent_representations
 
 parser = argparse.ArgumentParser()
 
@@ -14,7 +15,7 @@ Hyperparameters
 timestamp = utils.readable_timestamp()
 
 parser.add_argument("--batch_size", type=int, default=32)
-parser.add_argument("--n_updates", type=int, default=5000)
+parser.add_argument("--n_updates", type=int, default=5000)#default=5000)
 parser.add_argument("--n_hiddens", type=int, default=128)
 parser.add_argument("--n_residual_hiddens", type=int, default=32)
 parser.add_argument("--n_residual_layers", type=int, default=2)
@@ -26,14 +27,14 @@ parser.add_argument("--log_interval", type=int, default=50)
 parser.add_argument("--dataset",  type=str, default='ISIC')
 
 # whether or not to save model
-parser.add_argument("-save", action="store_true")
+parser.add_argument("-no_save", action="store_true")
 parser.add_argument("--filename",  type=str, default=timestamp)
 
 args = parser.parse_args()
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-if args.save:
+if not args.no_save:
     print('Results will be saved in ./results/vqvae_' + args.filename + '.pth')
 
 """
@@ -66,7 +67,8 @@ results = {
 
 def train():
     print("Training...")
-    for i in range(args.n_updates):
+    final_model=None
+    for i in range(1,args.n_updates+1):
         (x, _) = next(iter(training_loader))
         x = x.to(device)
         optimizer.zero_grad()
@@ -87,16 +89,26 @@ def train():
             """
             save model and print values
             """
-            if args.save:
+            if not args.no_save:
                 hyperparameters = args.__dict__
-                utils.save_model_and_results(
+                final_model = utils.save_model_and_results(
                     model, results, hyperparameters, args.filename)
+                
 
-            print('Update #', i, 'Recon Error:',
-                  np.mean(results["recon_errors"][-args.log_interval:]),
+            print('Update #', i, 
+                  'Recon Error:', np.mean(results["recon_errors"][-args.log_interval:]),
                   'Loss', np.mean(results["loss_vals"][-args.log_interval:]),
                   'Perplexity:', np.mean(results["perplexities"][-args.log_interval:]))
-
+    return final_model
 
 if __name__ == "__main__":
-    train()
+    final_model_path = train()
+    # final_model_path = "results/vqvae_data_wed_apr_24_17_44_13_2024.pth"
+    model_class = VQVAE(args.n_hiddens, args.n_residual_hiddens,
+              args.n_residual_layers, args.n_embeddings, args.embedding_dim, args.beta).to(device)
+
+    save_latent_representations(model_class,final_model_path,training_data)
+    save_latent_representations(model_class,final_model_path,validation_data)
+    # save_latent_representations()
+    #     path = "vqvae_data_wed_apr_24_17_44_13_2024.pth"
+

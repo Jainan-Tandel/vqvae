@@ -7,13 +7,15 @@ import os
 from datasets.block import BlockDataset, LatentBlockDataset
 import numpy as np
 from PIL import Image
+from models.quantizer import VectorQuantizer
 
 
 class CustomDataset(Dataset):
-    def __init__(self, img_dir="data", train=True, transform=None,size=(32,32)):
+    def __init__(self, img_dir="data", train=True, transform=None,size=(32,32), latent_folder="/LATENT_BLOCK"):
         self.size=(*size,3)
         folder = "/Train_data/" if train==True else "/Test_data/"
         self.img_dir = img_dir+folder
+        self.latent_dir = img_dir + latent_folder + folder
         self.img_filenames = [x for x in os.listdir(self.img_dir) if x.endswith(".jpg") or x.endswith(".JPG")]
         # self.label_df = pd.read_csv(label_file)  # Assuming labels are stored in a CSV file
         self.transform = transform
@@ -34,6 +36,7 @@ class CustomDataset(Dataset):
 
         # Get one-hot encoded labels from the dataframe
         return image, torch.tensor([1])
+    
     def find_var(self):
         all_images = np.zeros(shape=[len(self),*self.size])
         for idx in range(len(self)):
@@ -44,7 +47,21 @@ class CustomDataset(Dataset):
                 image = transforms.Resize(size=self.size[:2])(transforms.ToTensor()(image))
             all_images[idx] = np.array(image.permute((1,2,0)))
         return np.var(all_images)
+    
+    def save_discrete_latent_representations(self,encoder):
+        encoder.cpu()
+        vector_quantizer = VectorQuantizer(n_e=128, e_dim=64, beta=0.25)
+        latent_path = self.latent_dir + "latent_e_indices.npy"
+        all_discrete_representations = []
 
+        for idx in range(len(self)):
+            item = self.__getitem__(idx)[0].unsqueeze(0).cpu()
+            _, z_q , _, _, _= vector_quantizer(encoder(item))
+            all_discrete_representations.append(z_q.detach().numpy())
+
+        # Save the discrete representations to a .npy file
+        np.save(latent_path, np.array(all_discrete_representations))
+        return latent_path
 def load_isic():
     data_folder_path = os.getcwd()
     data_file_path = data_folder_path +\
@@ -103,8 +120,8 @@ def load_block():
 def load_latent_block():
     data_folder_path = os.getcwd()
     data_file_path = data_folder_path + \
-        '/data/latent_e_indices.npy'
-
+        '/data/LATENT_BLOCK'
+    
     train = LatentBlockDataset(data_file_path, train=True,
                          transform=None)
 
@@ -174,3 +191,5 @@ def save_model_and_results(model, results, hyperparameters, timestamp):
     }
     torch.save(results_to_save,
                SAVE_MODEL_PATH + '/vqvae_data_' + timestamp + '.pth')
+    
+    return SAVE_MODEL_PATH + '/vqvae_data_' + timestamp + '.pth'
