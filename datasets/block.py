@@ -39,10 +39,12 @@ class LatentBlockDataset(Dataset):
 
     def __init__(self, file_path, train=True, transform=None):
         print('Loading latent block data')
-        data = np.load(file_path, allow_pickle=True)
+        folder = "/Train_data/" if train==True else "/Test_data/"
+        filename = "latent_e_indices.npy"
+        data = np.load(file_path+folder+filename, allow_pickle=True)
         print('Done loading latent block data')
         
-        self.data = data[:-500] if train else data[-500:]
+        self.data = data
         self.transform = transform
 
     def __getitem__(self, index):

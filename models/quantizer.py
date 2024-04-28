@@ -51,9 +51,9 @@ class VectorQuantizer(nn.Module):
             torch.matmul(z_flattened, self.embedding.weight.t())
 
         # find closest encodings
-        min_encoding_indices = torch.argmin(d, dim=1).unsqueeze(1)
+        min_encoding_indices = torch.argmin(d, dim=1).unsqueeze(1) #.to(device)
         min_encodings = torch.zeros(
-            min_encoding_indices.shape[0], self.n_e).to(device)
+            min_encoding_indices.shape[0], self.n_e) #.to(device)
         min_encodings.scatter_(1, min_encoding_indices, 1)
 
         # get quantized latent vectors
